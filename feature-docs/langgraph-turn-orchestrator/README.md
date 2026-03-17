@@ -11,5 +11,6 @@ This folder contains all internal and experimental documents for the LangGraph t
 
 1. Read everything in `spec/`
 2. Generate the requested documents into `deliverables/`
-3. Review and commit the deliverables
-4. Use a separate agent to implement the feature from the reviewed deliverables
+3. Review `deliverables/00a-success-criteria.md` first and treat it as the top-priority implementation target
+4. Review and commit the deliverables
+5. Use a separate agent to implement the feature from the reviewed deliverables

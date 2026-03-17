@@ -16,6 +16,8 @@ Replace the agent-turn decision logic inside the existing embedded turn runner w
 
 The turn runner's public interface (function signature and return type) must remain identical. No caller should know which path ran.
 
+The highest-priority acceptance target for this feature is a real end-to-end pass of `feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md`. Failure handling comes next. Lower-priority completeness comes after that.
+
 ---
 
 ## Architecture Principle: Graph Decides, Host Executes

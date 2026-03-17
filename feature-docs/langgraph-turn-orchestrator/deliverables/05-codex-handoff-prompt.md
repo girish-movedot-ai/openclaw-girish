@@ -3,11 +3,12 @@
 ## Context
 
 You have these spec documents (read in this order):
-1. `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md` - Implementation spec (authoritative)
-2. `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md` - Failure register (every entry must be addressed)
-3. `feature-docs/langgraph-turn-orchestrator/deliverables/02-requirements.md` - Requirements with traceability
-4. `feature-docs/langgraph-turn-orchestrator/deliverables/01-use-case-brief.md` - Use-case context
-5. `feature-docs/langgraph-turn-orchestrator/spec/01-design-intent.md` - Design intent (context only - spec overrides where they conflict)
+1. `feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md` - Highest-priority acceptance target
+2. `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md` - Implementation spec (authoritative after success criteria)
+3. `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md` - Failure register (every entry must be addressed)
+4. `feature-docs/langgraph-turn-orchestrator/deliverables/02-requirements.md` - Requirements with traceability
+5. `feature-docs/langgraph-turn-orchestrator/deliverables/01-use-case-brief.md` - Use-case context
+6. `feature-docs/langgraph-turn-orchestrator/spec/01-design-intent.md` - Design intent (context only - spec overrides where they conflict)
 
 ## Your Task
 
@@ -68,6 +69,16 @@ Execution rules:
 
 Run targeted verification for:
 
+- Success criteria first:
+  - initialize OpenClaw locally if needed
+  - start the Gateway in local/dev mode
+  - open the browser Control UI
+  - send a real prompt through the browser UI
+  - prove the turn ran through `langgraph`, not `legacy`
+  - prove the LangGraph sidecar/process started
+  - run at least one loud negative case
+  - prove the Gateway stayed responsive after the negative case
+
 - Interface/parity:
   - `runEmbeddedPiAgent` signature preserved
   - `EmbeddedPiRunResult` shape preserved
@@ -102,6 +113,7 @@ Deliver:
 2. Any spec updates required by changed discovery
 3. A final report with:
    - changed files
+   - whether `00a-success-criteria.md` passed completely
    - which requirements were satisfied
    - which failure-mode tests were added/run
    - any remaining `Gap` items

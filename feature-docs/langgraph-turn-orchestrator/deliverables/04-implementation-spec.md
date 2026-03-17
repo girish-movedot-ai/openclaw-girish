@@ -4,6 +4,17 @@
 
 Build an experimental LangGraph-backed replacement for the decision-making/control-flow portion of the current embedded turn runner, while preserving the existing TypeScript entry point `runEmbeddedPiAgent(params): Promise<EmbeddedPiRunResult>`. The new path must remain host-owned by the gateway process, reuse current execution and approval surfaces, and fail loudly on sidecar or resume problems. This version is for low-risk experimental rollout, not full parity with every current embedded tool path.
 
+## 1A) Priority and Acceptance Order
+
+The implementation priority order is:
+
+1. Pass `feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md`
+2. Satisfy `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md`
+3. Preserve the required interfaces and mapping guarantees in this document
+4. Satisfy the remaining must-have requirements
+
+Do not treat unit coverage alone as success. The implementation is only complete when the end-to-end success criteria pass through a real Gateway + browser UI run.
+
 ## 2) System Responsibilities
 
 - **LangGraph sidecar (Python)** owns:
@@ -505,6 +516,14 @@ type HealthResponse = {
 | FM-L2-08 | 3A, 3D |
 
 ## 8) Test Matrix
+
+### End-to-end acceptance tests
+
+- `browser_ui_local_gateway_can_start_unconfigured_dev_mode`
+- `browser_ui_prompt_runs_through_langgraph_not_legacy`
+- `langgraph_sidecar_starts_during_real_gateway_turn`
+- `real_browser_ui_turn_returns_final_reply`
+- `forced_failure_is_loud_and_gateway_stays_healthy`
 
 ### Parity and routing tests
 

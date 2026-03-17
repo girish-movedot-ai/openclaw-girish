@@ -16,6 +16,17 @@ This is an **experimental build**, not production-grade. The goal is a working p
 
 But: the spec must be precise enough that the implementing agent **doesn't waste time debugging ambiguous requirements**. Every type, every interface, every state transition must be concrete - derived from what you find in the code, not invented.
 
+## Priority Order
+
+The deliverables must make one priority order unmistakable:
+
+1. Passing the end-to-end success criteria is the top priority
+2. Handling the required failure modes is the next priority
+3. Preserving interfaces and mappings comes next
+4. Remaining must-have requirements come after that
+
+The implementation agent should optimize for observable end-to-end success through the real OpenClaw Gateway and browser UI, not for abstract completeness alone.
+
 ---
 
 ## Input Document
@@ -75,7 +86,8 @@ When you explore the codebase:
 Run these phases in order. Do not skip phases. Save each deliverable before starting the next phase.
 
 ```
-Phase 0:  Codebase Discovery + System Profile    → feature-docs/langgraph-turn-orchestrator/deliverables/00b-system-profile.md
+Phase 0:  Success Criteria                       → feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md
+Phase 0.5: Codebase Discovery + System Profile  → feature-docs/langgraph-turn-orchestrator/deliverables/00b-system-profile.md
 Phase 1:  Use-Case Brief (derive from plan)       → feature-docs/langgraph-turn-orchestrator/deliverables/01-use-case-brief.md
 Phase 1.5: User Stories + Negative Stories        → feature-docs/langgraph-turn-orchestrator/deliverables/01b-user-stories.md
 Phase 2:  Requirements (Must-haves only)          → feature-docs/langgraph-turn-orchestrator/deliverables/02-requirements.md
@@ -89,7 +101,27 @@ Create `feature-docs/langgraph-turn-orchestrator/deliverables/` directory before
 
 ---
 
-## Phase 0: Codebase Discovery + System Profile
+## Phase 0: Success Criteria
+
+Write `feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md` first.
+
+This is the most important deliverable. The purpose of the rest of the spec package is to help a later implementation agent pass this document in a real end-to-end run.
+
+The success criteria must:
+- require a real Gateway run, not only unit tests
+- require use of the browser-based Control UI
+- require proof that the LangGraph path ran instead of legacy
+- require at least one loud negative-case failure
+- require the implementation agent to initialize OpenClaw locally if needed
+- avoid any requirement to connect a messaging service
+
+The implementation agent must be able to use this document as the primary acceptance target.
+
+Add a final `## Evidence` section listing the exact files and symbols used.
+
+---
+
+## Phase 0.5: Codebase Discovery + System Profile
 
 This is the most critical phase. Everything downstream depends on what you find here.
 
