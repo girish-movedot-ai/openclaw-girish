@@ -6,6 +6,8 @@ This document describes **what we want to build and why**. It does NOT describe 
 
 If anything in this document contradicts what you find in the code, **the code wins**.
 
+This document is intent only. It is not evidence. No implementation claim should be treated as true unless the discovery agent verified it in the codebase.
+
 ---
 
 ## Summary

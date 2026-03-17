@@ -33,6 +33,31 @@ The design intent document is authoritative for **what we want** - the desired b
 
 It is NOT authoritative for **what exists in the codebase**. It contains no file paths, no type names, no code references. Those must come exclusively from your codebase exploration.
 
+## Proof Standard
+
+Your job is to prove what exists in the codebase, not to write plausible documentation.
+
+Treat these as hard rules:
+
+1. Every non-trivial claim about the current system must be backed by code evidence.
+2. Code evidence means a real repo path plus the symbol, type, function signature, or code block you used.
+3. If you cannot prove a claim from the codebase, label it clearly as `Unknown` or `Gap`.
+4. Do not fill missing details with "likely", "probably", "should", or "presumably".
+5. Do not convert design-intent terms into claimed code facts unless you found the matching code.
+6. If a section depends on an unverified fact, stop and record the missing evidence before continuing.
+
+### Required Evidence Format
+
+For every deliverable, include a final `## Evidence` section that lists the exact files and symbols used to support that document.
+
+Minimum format:
+
+```markdown
+## Evidence
+- `path/to/file.ts` - `symbolName`, why it matters
+- `path/to/other-file.ts` - `OtherType`, fields copied from code
+```
+
 ### Anti-Anchoring Rules
 
 The design intent document uses working names like `runEmbeddedPiAgent`, `EmbeddedPiRunResult`, `GraphTurnRequest`, etc. These are **conceptual labels** - the actual function names, type names, and field names in the codebase may be completely different.
@@ -202,6 +227,9 @@ Write `feature-docs/langgraph-turn-orchestrator/deliverables/00b-system-profile.
 - Level 1 (workflow/system): Required
 - Level 2 (component/interface): Required - targeted at sidecar boundary and RPC layer
 - Level 3 (wire/protocol/field): Skip for experimental scope
+
+## Evidence
+[List the exact files and symbols used in this document]
 ```
 
 **GATE 0: Do not proceed until the system profile is saved and you have the actual type signatures of the turn runner's input and output from the codebase. If you cannot find the turn runner entry point, STOP and report what you found instead. Do not guess.**
@@ -248,6 +276,9 @@ Replace the decision-making and control flow inside the agent turn runner with a
 2. RPC timeout → must not hang the gateway
 3. Bad graph state → must not produce fake success
 4. Approval resume after restart → nice to have, not blocking
+
+## Evidence
+[List the exact files and symbols used in this document]
 ```
 
 ---
@@ -264,6 +295,8 @@ Must-have stories:
 - Sidecar crash produces clear failure (negative)
 - Legacy fallback activates when sidecar unavailable on new turn (negative)
 - Mid-turn sidecar crash does NOT fall back to legacy (negative)
+
+Add a final `## Evidence` section listing the exact files and symbols used.
 
 ---
 
@@ -288,6 +321,8 @@ Categories:
 **Skip Should and Deferred categories entirely.** Only Must-haves.
 
 Traceability: every requirement must trace to a user story. Every story must have at least one requirement.
+
+Add a final `## Evidence` section listing the exact files and symbols used.
 
 ---
 
@@ -319,6 +354,8 @@ Required sections:
 ### 5) Observability
 - Required log fields: traceId, agentId, sessionId, orchestrationMode, graphNode, intent, terminalState
 - Required events: sidecar_start, sidecar_crash, sidecar_restart, turn_start, turn_complete, turn_failed, fallback_to_legacy
+
+Add a final `## Evidence` section listing the exact files and symbols used.
 
 ---
 
@@ -370,6 +407,8 @@ Use this schema:
 For each row, propose:
 - A concrete mitigation (code-level, not hand-wavy)
 - A concrete test case name and description
+
+Add a final `## Evidence` section listing the exact files and symbols used.
 
 ---
 
@@ -427,6 +466,9 @@ Write `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-s
 **12) Traceability**
 - Every requirement from Phase 2 → spec section
 - Every failure mode from Phase 3 → spec section + test case
+
+**13) Evidence**
+- List the exact files and symbols used in this document
 
 ---
 
@@ -498,4 +540,6 @@ Before declaring done, verify:
 - [ ] `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md` covers all mandatory FM rows with mitigations and test cases
 - [ ] `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md` has field-by-field type mapping tables
 - [ ] `feature-docs/langgraph-turn-orchestrator/deliverables/05-codex-handoff-prompt.md` is self-contained and references all other deliverables
+- [ ] Every deliverable ends with an `Evidence` section listing exact files and symbols
+- [ ] Any unproven claim is marked `Unknown` or `Gap`
 - [ ] No TBD, no "etc.", no invented types anywhere in the deliverables
