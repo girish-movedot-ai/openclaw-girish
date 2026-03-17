@@ -318,3 +318,38 @@
   - `node --import tsx scripts/release-check.ts`
   - `pnpm release:check`
   - `pnpm test:install:smoke` or `OPENCLAW_INSTALL_SMOKE_SKIP_NONROOT=1 pnpm test:install:smoke` for non-root smoke path.
+
+## Cursor Cloud specific instructions
+
+### Services
+
+| Service             | Start command        | Port            | Notes                                                                      |
+| ------------------- | -------------------- | --------------- | -------------------------------------------------------------------------- |
+| Gateway (dev)       | `pnpm gateway:dev`   | 19001           | Uses `--dev` profile, isolates state under `~/.openclaw-dev`               |
+| Gateway (prod-like) | `pnpm gateway:watch` | 18789           | Auto-reloads on source/config changes                                      |
+| Control UI          | Built into gateway   | same as gateway | Auto-built on first gateway start if missing; rebuild with `pnpm ui:build` |
+
+### Quick start for dev
+
+1. `pnpm install` (deps)
+2. `pnpm build` (compile TS to `dist/`)
+3. `pnpm openclaw config set gateway.mode local && pnpm openclaw setup` (first-time gateway config)
+4. `pnpm gateway:dev` (start gateway on port 19001 with channels skipped)
+5. Health check: `curl http://127.0.0.1:19001/healthz` should return `{"ok":true,"status":"live"}`
+
+### Key commands (see "Build, Test, and Development Commands" section above for full list)
+
+- Lint: `pnpm check`
+- Tests: `pnpm test` (full suite, very long on constrained VMs — use `OPENCLAW_TEST_PROFILE=low pnpm test` or targeted `pnpm test -- <path>`)
+- Build: `pnpm build`
+- CLI dev: `pnpm openclaw <command>`
+- Status: `pnpm openclaw --dev status` (when gateway:dev is running)
+
+### Gotchas
+
+- The full test suite (`pnpm test`) runs multiple vitest configs in parallel via `scripts/test-parallel.mjs` and can take 15+ minutes on VMs with limited CPU/RAM. Use `OPENCLAW_TEST_PROFILE=low` and target specific tests with `pnpm test -- <path-or-filter>` for faster iteration.
+- `pnpm gateway:dev` uses the `--dev` profile (port 19001, state in `~/.openclaw-dev`). CLI commands must also use `--dev` to talk to it (e.g. `pnpm openclaw --dev status`).
+- `pnpm gateway:watch` uses the production profile (port 18789). Use `pnpm openclaw status` (no `--dev`) to connect.
+- `tsgo` (TypeScript checker) is `@typescript/native-preview`; pre-existing type errors in extensions are normal on `main`.
+- `pnpm check` runs format + tsgo + oxlint + custom lint scripts. Pre-existing lint/format issues may exist on `main`.
+- No external databases required — the gateway is file-based (SQLite, JSON config at `~/.openclaw/`).
