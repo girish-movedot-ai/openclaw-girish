@@ -95,6 +95,7 @@ Example target turn:
 4. Approval resume after restart is currently a real gap because current approval state is only in memory; if implemented, the new path must state exactly what persists and what does not.
 
 ## Evidence
+
 - `feature-docs/langgraph-turn-orchestrator/spec/01-design-intent.md` - target workflow, graph nodes, interrupt/resume intent, failure priorities
 - `src/gateway/server-methods/agent.ts` - `agentHandlers.agent`, `dispatchAgentRunFromGateway`
 - `src/agents/agent-command.ts` - `agentCommandFromIngress`, `runAgentAttempt`
