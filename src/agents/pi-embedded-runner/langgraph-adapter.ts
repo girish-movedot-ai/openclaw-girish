@@ -251,6 +251,37 @@ function mapCompletionToResult(params: {
   };
 }
 
+async function emitVisiblePayloads(
+  params: RunEmbeddedPiAgentParams,
+  payloads: NonNullable<EmbeddedPiRunResult["payloads"]> | undefined,
+): Promise<void> {
+  if (!payloads || payloads.length === 0) {
+    return;
+  }
+  await params.onAssistantMessageStart?.();
+  for (const payload of payloads) {
+    const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : undefined);
+    if (payload.text || mediaUrls) {
+      await params.onPartialReply?.({
+        ...(payload.text ? { text: payload.text } : {}),
+        ...(mediaUrls ? { mediaUrls } : {}),
+      });
+      await params.onBlockReply?.({
+        ...(payload.text ? { text: payload.text } : {}),
+        ...(mediaUrls ? { mediaUrls } : {}),
+        ...(payload.isError ? { isError: true } : {}),
+      });
+      params.onAgentEvent?.({
+        stream: "assistant",
+        data: {
+          ...(payload.text ? { text: payload.text, delta: payload.text } : {}),
+          ...(mediaUrls ? { mediaUrls } : {}),
+        },
+      });
+    }
+  }
+}
+
 function resolveShellEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -377,24 +408,28 @@ export async function runLangGraphTurn(
         log.info(
           `langgraph turn complete runId=${params.runId} terminalState=${response.response.terminalState}`,
         );
-        return mapCompletionToResult({
+        const result = mapCompletionToResult({
           turn,
           response: response.response,
           durationMs: Date.now() - startedAt,
         });
+        await emitVisiblePayloads(params, result.payloads);
+        return result;
       }
       if (response.status === "failed") {
         emitLangGraphEvent(params, "turn_failed", {
           terminalState: response.response?.terminalState ?? "failed",
           errorKind: response.error.kind,
         });
-        return buildErrorResult({
+        const result = buildErrorResult({
           turn,
           durationMs: Date.now() - startedAt,
           kind: "langgraph_failure",
           message: response.error.message,
           stopReason: "langgraph:failed",
         });
+        await emitVisiblePayloads(params, result.payloads);
+        return result;
       }
       interruptsSeen += 1;
       if (interruptsSeen > 2) {
@@ -423,13 +458,15 @@ export async function runLangGraphTurn(
       message,
     });
     log.error(`langgraph turn failed runId=${params.runId} error=${message}`);
-    return buildErrorResult({
+    const result = buildErrorResult({
       turn,
       durationMs: Date.now() - startedAt,
       kind,
       message,
       stopReason: "langgraph:error",
     });
+    await emitVisiblePayloads(params, result.payloads);
+    return result;
   }
 }
 
