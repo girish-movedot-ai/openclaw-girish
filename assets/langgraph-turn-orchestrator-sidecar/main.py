@@ -55,15 +55,24 @@ def _extract_exact_reply(prompt: str) -> str | None:
     return prompt[idx + len(marker) :].strip() or None
 
 
+def _extract_suffix_after_marker(prompt: str, marker: str) -> str | None:
+    lowered = prompt.lower()
+    idx = lowered.rfind(marker)
+    if idx < 0:
+        return None
+    suffix = prompt[idx + len(marker) :].strip()
+    return suffix or None
+
+
 def _decide(turn: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     prompt = str(turn.get("prompt") or "").strip()
     lowered = prompt.lower()
-    if lowered.startswith("clarify:"):
+    if "clarify:" in lowered:
         return "ask_clarification", None
-    if lowered.startswith("escalate:"):
+    if "escalate:" in lowered:
         return "escalate", None
-    if lowered.startswith("approve:"):
-        command = prompt.split(":", 1)[1].strip()
+    command = _extract_suffix_after_marker(prompt, "approve:")
+    if command is not None:
         return (
             "execute",
             {
@@ -75,8 +84,8 @@ def _decide(turn: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
                 "verificationContract": {"expectExitCode": 0},
             },
         )
-    if lowered.startswith("shell:"):
-        command = prompt.split(":", 1)[1].strip()
+    command = _extract_suffix_after_marker(prompt, "shell:")
+    if command is not None:
         return (
             "execute",
             {
