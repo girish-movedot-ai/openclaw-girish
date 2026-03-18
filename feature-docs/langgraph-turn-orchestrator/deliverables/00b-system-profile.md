@@ -65,7 +65,7 @@
   - `src/agents/bash-tools.exec-host-gateway.ts` and `src/agents/bash-tools.exec-host-node.ts` return a pending tool result immediately, then run an async follow-up after approval resolution. The original turn does not resume through `runEmbeddedPiAgent`.
 - Existing runtime routing
   - `src/config/types.agents.ts` - `AgentRuntimeConfig` already switches agents between `embedded` and `acp`.
-  - Gap: no `langgraph` mode exists, and `src/config/sessions/types.ts` has no session-level orchestration mode field.
+  - `src/config/types.agent-defaults.ts`, `src/config/types.agents.ts`, and `src/config/sessions/types.ts` now expose `turnOrchestration?: "legacy" | "langgraph"` for default, per-agent, and per-session routing.
 
 ## 5) Key Interfaces (Extracted from Code)
 
@@ -74,7 +74,7 @@
 ```ts
 export async function runEmbeddedPiAgent(
   params: RunEmbeddedPiAgentParams,
-): Promise<EmbeddedPiRunResult>
+): Promise<EmbeddedPiRunResult>;
 ```
 
 ### Turn Runner Input Type
@@ -234,19 +234,19 @@ export type EmbeddedPiRunResult = {
 
 ### Caller Inventory
 
-| Caller module | Real caller symbol | Parameters used | Result handling |
-|---|---|---|---|
-| `src/agents/agent-command.ts` | `runAgentAttempt` | Builds the main user/gateway turn with session/workspace/model/auth/prompt/timeouts and passes channel context. | Returns the `EmbeddedPiRunResult` back to agent command delivery/gateway handling. |
-| `src/auto-reply/reply/agent-runner-execution.ts` | `runAgentTurnWithFallback` | Adds streaming callbacks (`onPartialReply`, `onToolResult`, `onAgentEvent`, `onBlockReply*`), sender metadata, group context, and fallback retry options. | Uses `result.meta.error` for session reset logic, tracks compaction, and returns normalized final reply payloads. |
-| `src/auto-reply/reply/followup-runner.ts` | closure returned by `createFollowupRunner` | Passes queued follow-up turn context, sender metadata, delivery targets, and prompt. | Persists usage/system prompt report, filters duplicate messaging-tool payloads, and sends follow-up payloads. |
-| `src/auto-reply/reply/agent-runner-memory.ts` | `runMemoryFlushIfNeeded` | Runs trigger=`"memory"` with `memoryFlushWritePath` and compaction event observation. | Updates session memory-flush metadata and compaction counters; ignores normal payload delivery. |
-| `src/cron/isolated-agent/run.ts` | `runCronIsolatedAgentTurn` | Runs trigger=`"cron"` with explicit cron delivery context, tool policy, timeout, and bootstrap context mode. | May issue a second turn for interim acknowledgements, then persists telemetry and delivery output. |
-| `src/commands/models/list.probe.ts` | `probeTarget` | Uses probe session/workspace, provider/model/auth profile, fixed prompt, and low verbosity. | Ignores payloads and treats success/failure as auth probe status. |
-| `src/hooks/llm-slug-generator.ts` | `generateSlugViaLLM` | Creates a one-off temp session and prompt. | Reads the first payload text and normalizes it into a slug. |
-| `extensions/voice-call/src/response-generator.ts` | `generateVoiceResponse` | Uses voice-specific `messageProvider`, temp `runId`, timeout, and extra system prompt. | Concatenates non-error payload texts into a voice response. |
-| `extensions/llm-task/src/llm-task-tool.ts` | `createLlmTaskTool` tool handler | Runs with `disableTools: true`, JSON-only prompt, temp session file, and optional auth profile. | Collects payload text, parses JSON, and validates against schema. |
-| `src/plugins/runtime/runtime-agent.ts` | `createRuntimeAgent` | Exposes `runEmbeddedPiAgent` to plugins through the plugin runtime surface. | No result transformation; direct runtime export. |
-| `src/gateway/server-methods/agent.ts` | `agentHandlers.agent` -> `dispatchAgentRunFromGateway` -> `agentCommandFromIngress` | Indirect top-level gateway ingress for user-triggered runs. | Stores dedupe entries and returns the final agent command result to gateway clients. |
+| Caller module                                     | Real caller symbol                                                                  | Parameters used                                                                                                                                           | Result handling                                                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `src/agents/agent-command.ts`                     | `runAgentAttempt`                                                                   | Builds the main user/gateway turn with session/workspace/model/auth/prompt/timeouts and passes channel context.                                           | Returns the `EmbeddedPiRunResult` back to agent command delivery/gateway handling.                                |
+| `src/auto-reply/reply/agent-runner-execution.ts`  | `runAgentTurnWithFallback`                                                          | Adds streaming callbacks (`onPartialReply`, `onToolResult`, `onAgentEvent`, `onBlockReply*`), sender metadata, group context, and fallback retry options. | Uses `result.meta.error` for session reset logic, tracks compaction, and returns normalized final reply payloads. |
+| `src/auto-reply/reply/followup-runner.ts`         | closure returned by `createFollowupRunner`                                          | Passes queued follow-up turn context, sender metadata, delivery targets, and prompt.                                                                      | Persists usage/system prompt report, filters duplicate messaging-tool payloads, and sends follow-up payloads.     |
+| `src/auto-reply/reply/agent-runner-memory.ts`     | `runMemoryFlushIfNeeded`                                                            | Runs trigger=`"memory"` with `memoryFlushWritePath` and compaction event observation.                                                                     | Updates session memory-flush metadata and compaction counters; ignores normal payload delivery.                   |
+| `src/cron/isolated-agent/run.ts`                  | `runCronIsolatedAgentTurn`                                                          | Runs trigger=`"cron"` with explicit cron delivery context, tool policy, timeout, and bootstrap context mode.                                              | May issue a second turn for interim acknowledgements, then persists telemetry and delivery output.                |
+| `src/commands/models/list.probe.ts`               | `probeTarget`                                                                       | Uses probe session/workspace, provider/model/auth profile, fixed prompt, and low verbosity.                                                               | Ignores payloads and treats success/failure as auth probe status.                                                 |
+| `src/hooks/llm-slug-generator.ts`                 | `generateSlugViaLLM`                                                                | Creates a one-off temp session and prompt.                                                                                                                | Reads the first payload text and normalizes it into a slug.                                                       |
+| `extensions/voice-call/src/response-generator.ts` | `generateVoiceResponse`                                                             | Uses voice-specific `messageProvider`, temp `runId`, timeout, and extra system prompt.                                                                    | Concatenates non-error payload texts into a voice response.                                                       |
+| `extensions/llm-task/src/llm-task-tool.ts`        | `createLlmTaskTool` tool handler                                                    | Runs with `disableTools: true`, JSON-only prompt, temp session file, and optional auth profile.                                                           | Collects payload text, parses JSON, and validates against schema.                                                 |
+| `src/plugins/runtime/runtime-agent.ts`            | `createRuntimeAgent`                                                                | Exposes `runEmbeddedPiAgent` to plugins through the plugin runtime surface.                                                                               | No result transformation; direct runtime export.                                                                  |
+| `src/gateway/server-methods/agent.ts`             | `agentHandlers.agent` -> `dispatchAgentRunFromGateway` -> `agentCommandFromIngress` | Indirect top-level gateway ingress for user-triggered runs.                                                                                               | Stores dedupe entries and returns the final agent command result to gateway clients.                              |
 
 ### Approval Flow
 
@@ -281,7 +281,7 @@ export type EmbeddedPiRunResult = {
 - LangGraph version: Gap. Repo search found no LangGraph dependency or Python runtime module for this feature.
 - Current runtime dispatch mechanism:
   - Existing: `src/config/types.agents.ts` - `AgentRuntimeConfig` supports `type: "embedded"` or `type: "acp"`
-  - Gap: no `langgraph` runtime value and no session-level runtime/orchestration override field were found
+  - Current LangGraph routing is a separate orchestration selector, not a new `AgentRuntimeConfig.type` value.
 - Deployment/process lifecycle:
   - `src/cli/gateway-cli/run-loop.ts` - `runGatewayLoop` owns gateway lifecycle, signal handling, restart drain, and active-run shutdown behavior
   - Gap: no Python sidecar process manager exists in the current codebase
@@ -292,7 +292,7 @@ export type EmbeddedPiRunResult = {
   - Approval follow-up RPC through gateway tool calls: `src/agents/bash-tools.exec-approval-request.ts`
 - Feature flag system:
   - Mismatch with design intent: the repo is not starting from zero. It already has agent runtime selection (`embedded` vs `acp`).
-  - Gap: no `langgraph` option, no `legacy`/`langgraph` value pair, and no per-session override for this feature were found.
+  - Current state: `turnOrchestration` now provides the `legacy` / `langgraph` selector at defaults, per-agent, and per-session scope.
 
 ## 7) FMEA Depth Target
 
@@ -304,6 +304,7 @@ export type EmbeddedPiRunResult = {
 - Level 3 (wire/protocol/field): Skip for experimental scope
 
 ## Evidence
+
 - `src/agents/pi-embedded-runner/run.ts` - `runEmbeddedPiAgent`, queueing, workspace resolution, model/auth/context-engine setup, retry loop, return shape usage
 - `src/agents/pi-embedded-runner/run/params.ts` - `RunEmbeddedPiAgentParams`, full input fields
 - `src/agents/pi-embedded-runner/types.ts` - `EmbeddedPiAgentMeta`, `EmbeddedPiRunMeta`, `EmbeddedPiRunResult`
@@ -336,7 +337,7 @@ export type EmbeddedPiRunResult = {
 - `src/gateway/exec-approval-manager.ts` - `ExecApprovalManager`, in-memory pending approval map
 - `src/config/sessions/types.ts` - `SessionEntry`, existing session persistence surface
 - `src/config/types.agents.ts` - `AgentRuntimeConfig`, `AgentConfig`, existing runtime selection surface
-- `src/config/zod-schema.agents.ts` - `AgentsSchema`, existing agent config schema entry point
+- `src/config/zod-schema.agent-runtime.ts` - `AgentEntrySchema`, existing agent config schema entry point
 - `src/config/types.openclaw.ts` - `OpenClawConfig`, top-level config surface
 - `src/cli/gateway-cli/run-loop.ts` - `runGatewayLoop`, gateway lifecycle and restart drain behavior
 - `src/process/supervisor/adapters/child.ts` - `createChildAdapter`, stdio child-process pattern

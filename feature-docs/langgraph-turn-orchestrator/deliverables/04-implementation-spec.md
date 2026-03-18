@@ -47,7 +47,7 @@ Do not treat unit coverage alone as success. The implementation is only complete
 ```ts
 export async function runEmbeddedPiAgent(
   params: RunEmbeddedPiAgentParams,
-): Promise<EmbeddedPiRunResult>
+): Promise<EmbeddedPiRunResult>;
 ```
 
 - **Behavior rules**
@@ -77,12 +77,14 @@ type TurnOrchestrationMode = "legacy" | "langgraph";
 function resolveTurnOrchestrationMode(params: {
   cfg?: OpenClawConfig;
   agentId?: string;
+  sessionKey?: string;
   sessionEntry?: SessionEntry;
-}): TurnOrchestrationMode
+}): TurnOrchestrationMode;
 ```
 
 - **Behavior rules**
   1. Resolution order: session override -> per-agent config -> global/default config -> `legacy`.
+     - If the caller does not already hold `sessionEntry`, the resolver may load it by `sessionKey`.
   2. Do **not** overload `AgentRuntimeConfig.type` (`embedded` / `acp`) for this decision. LangGraph replaces the embedded turn controller, not the ACP runtime.
   3. `langgraph` only applies to embedded-runtime turns.
   4. Invalid values must fail closed or default by one explicit rule covered by tests.
@@ -101,14 +103,8 @@ function resolveTurnOrchestrationMode(params: {
 type GraphRpcClient = {
   ensureStarted(): Promise<void>;
   health(timeoutMs?: number): Promise<{ ok: boolean }>;
-  invokeTurn(
-    request: InvokeTurnRequest,
-    timeoutMs: number,
-  ): Promise<InvokeTurnResponse>;
-  resumeTurn(
-    request: ResumeTurnRequest,
-    timeoutMs: number,
-  ): Promise<ResumeTurnResponse>;
+  invokeTurn(request: InvokeTurnRequest, timeoutMs: number): Promise<InvokeTurnResponse>;
+  resumeTurn(request: ResumeTurnRequest, timeoutMs: number): Promise<ResumeTurnResponse>;
   stop(): Promise<void>;
 };
 ```
@@ -135,7 +131,7 @@ async function runLangGraphTurn(
   deps: {
     sidecar: GraphRpcClient;
   },
-): Promise<EmbeddedPiRunResult>
+): Promise<EmbeddedPiRunResult>;
 ```
 
 - **Behavior rules**
@@ -156,10 +152,10 @@ async function runLangGraphTurn(
 
 ### E. Python LangGraph sidecar
 
-- **File location:** `Gap`
-- **Reason for Gap**
-  - The repo has no established Python package/application layout for product runtime code.
-  - The only Python files found are standalone scripts under `skills/**/scripts/*.py` and `scripts/check-composite-action-input-interpolation.py`.
+- **File location:** `assets/langgraph-turn-orchestrator-sidecar/`
+- **Location rule**
+  - Keep the runtime Python files under `assets/` so they ship with the npm package without adding a new dist-copy pipeline.
+  - Resolve the sidecar entry path from the OpenClaw package root at runtime.
 - **Required interface**
   - `invoke_turn`
   - `resume_turn`
@@ -282,17 +278,17 @@ class GraphTurnState(TypedDict, total=False):
 
 ### 4.2 Nodes
 
-| Node | Inputs | Outputs |
-|---|---|---|
-| `ingest_turn` | `GraphTurnRequest` | `GraphTurnState.turn`, `retryCount=0` |
-| `reconstruct_state` | current `turn` | session/task understanding used by later nodes |
-| `diagnose_unknowns` | reconstructed state | `unknowns`, optional `blockingReason` |
-| `decide_intent` | `turn`, `unknowns`, reconstructed state | `intent` = `respond` / `execute` / `ask_clarification` / `escalate` |
-| `build_execution_request` | `intent=execute`, `turn` | `executionRequest` |
-| `await_host_execution` | `executionRequest` | graph interrupt plus checkpoint id |
-| `verify_result` | `executionResult`, `retryCount` | final terminal state or one retry |
-| `render_reply` | intent/result/failure state | `response.payloads`, `response.error`, `response.terminalState` |
-| `persist_turn_artifacts` | final state | checkpoint/state persistence needed for resume |
+| Node                      | Inputs                                  | Outputs                                                             |
+| ------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `ingest_turn`             | `GraphTurnRequest`                      | `GraphTurnState.turn`, `retryCount=0`                               |
+| `reconstruct_state`       | current `turn`                          | session/task understanding used by later nodes                      |
+| `diagnose_unknowns`       | reconstructed state                     | `unknowns`, optional `blockingReason`                               |
+| `decide_intent`           | `turn`, `unknowns`, reconstructed state | `intent` = `respond` / `execute` / `ask_clarification` / `escalate` |
+| `build_execution_request` | `intent=execute`, `turn`                | `executionRequest`                                                  |
+| `await_host_execution`    | `executionRequest`                      | graph interrupt plus checkpoint id                                  |
+| `verify_result`           | `executionResult`, `retryCount`         | final terminal state or one retry                                   |
+| `render_reply`            | intent/result/failure state             | `response.payloads`, `response.error`, `response.terminalState`     |
+| `persist_turn_artifacts`  | final state                             | checkpoint/state persistence needed for resume                      |
 
 ### 4.3 Routing rules
 
@@ -393,127 +389,127 @@ type HealthResponse = {
 
 ### 6.1 `RunEmbeddedPiAgentParams` -> `GraphTurnRequest`
 
-| Current field | Graph field / disposition | Notes |
-|---|---|---|
-| `sessionId` | `turn.sessionId` | direct |
-| `sessionKey` | `turn.sessionKey` | direct |
-| `agentId` | `turn.agentId` | direct |
-| `messageChannel` | `turn.messageChannel` | direct |
-| `messageProvider` | `turn.messageProvider` | direct |
-| `agentAccountId` | `turn.agentAccountId` | direct |
-| `trigger` | `turn.trigger` | direct |
-| `memoryFlushWritePath` | `turn.memoryFlushWritePath` | direct |
-| `messageTo` | `turn.messageTo` | direct |
-| `messageThreadId` | `turn.messageThreadId` | direct |
-| `groupId` | `turn.groupId` | direct |
-| `groupChannel` | `turn.groupChannel` | direct |
-| `groupSpace` | `turn.groupSpace` | direct |
-| `spawnedBy` | `turn.spawnedBy` | direct |
-| `senderId` | `turn.senderId` | direct |
-| `senderName` | `turn.senderName` | direct |
-| `senderUsername` | `turn.senderUsername` | direct |
-| `senderE164` | `turn.senderE164` | direct |
-| `senderIsOwner` | `turn.senderIsOwner` | direct |
-| `currentChannelId` | `turn.currentChannelId` | direct |
-| `currentThreadTs` | `turn.currentThreadTs` | direct |
-| `currentMessageId` | `turn.currentMessageId` | direct |
-| `replyToMode` | `turn.replyToMode` | direct |
-| `hasRepliedRef` | host-only | mutable ref; not serializable |
-| `requireExplicitMessageTarget` | `turn.requireExplicitMessageTarget` | direct |
-| `disableMessageTool` | `turn.disableMessageTool` | direct |
-| `allowGatewaySubagentBinding` | `turn.allowGatewaySubagentBinding` | direct |
-| `sessionFile` | `turn.sessionFile` | direct |
-| `workspaceDir` | `turn.workspaceDir` | direct |
-| `agentDir` | `turn.agentDir` | direct |
-| `config` | `turn.config` | serialized `OpenClawConfig` snapshot |
-| `skillsSnapshot` | `turn.skillsSnapshot` | serialized snapshot |
-| `prompt` | `turn.prompt` | direct |
-| `images` | `turn.images` | serialized `ImageContent[]` |
-| `clientTools` | `turn.clientTools` | direct in contract, but **Gap** for v1 shell-only behavior |
-| `disableTools` | `turn.disableTools` | direct |
-| `provider` | `turn.provider` | direct |
-| `model` | `turn.model` | direct |
-| `authProfileId` | `turn.authProfileId` | direct |
-| `authProfileIdSource` | `turn.authProfileIdSource` | direct |
-| `thinkLevel` | `turn.thinkLevel` | direct |
-| `fastMode` | `turn.fastMode` | direct |
-| `verboseLevel` | `turn.verboseLevel` | direct |
-| `reasoningLevel` | `turn.reasoningLevel` | direct |
-| `toolResultFormat` | `turn.toolResultFormat` | direct |
-| `suppressToolErrorWarnings` | `turn.suppressToolErrorWarnings` | direct |
-| `bootstrapContextMode` | `turn.bootstrapContextMode` | direct |
-| `bootstrapContextRunKind` | `turn.bootstrapContextRunKind` | direct |
-| `bootstrapPromptWarningSignaturesSeen` | `turn.bootstrapPromptWarningSignaturesSeen` | direct |
-| `bootstrapPromptWarningSignature` | `turn.bootstrapPromptWarningSignature` | direct |
-| `execOverrides` | `turn.execOverrides` | direct |
-| `bashElevated` | `turn.bashElevated` | direct |
-| `timeoutMs` | `turn.timeoutMs` | direct |
-| `runId` | `turn.runId` and RPC `requestId` | direct |
-| `abortSignal` | host-only | adapter-owned cancellation only |
-| `shouldEmitToolResult` | host-only | callback/presentation control |
-| `shouldEmitToolOutput` | host-only | callback/presentation control |
-| `onPartialReply` | host-only | callback |
-| `onAssistantMessageStart` | host-only | callback |
-| `onBlockReply` | host-only | callback |
-| `onBlockReplyFlush` | host-only | callback |
-| `blockReplyBreak` | `turn.blockReplyBreak` | direct |
-| `blockReplyChunking` | `turn.blockReplyChunking` | direct |
-| `onReasoningStream` | host-only | callback |
-| `onReasoningEnd` | host-only | callback |
-| `onToolResult` | host-only | callback |
-| `onAgentEvent` | host-only | callback |
-| `lane` | host-only | scheduling only |
-| `enqueue` | host-only | function, not serializable |
-| `extraSystemPrompt` | `turn.extraSystemPrompt` | direct |
-| `inputProvenance` | `turn.inputProvenance` | serialized |
-| `streamParams` | `turn.streamParams` | serialized |
-| `ownerNumbers` | `turn.ownerNumbers` | direct |
-| `enforceFinalTag` | `turn.enforceFinalTag` | direct |
-| `allowTransientCooldownProbe` | `turn.allowTransientCooldownProbe` | direct |
+| Current field                          | Graph field / disposition                   | Notes                                                      |
+| -------------------------------------- | ------------------------------------------- | ---------------------------------------------------------- |
+| `sessionId`                            | `turn.sessionId`                            | direct                                                     |
+| `sessionKey`                           | `turn.sessionKey`                           | direct                                                     |
+| `agentId`                              | `turn.agentId`                              | direct                                                     |
+| `messageChannel`                       | `turn.messageChannel`                       | direct                                                     |
+| `messageProvider`                      | `turn.messageProvider`                      | direct                                                     |
+| `agentAccountId`                       | `turn.agentAccountId`                       | direct                                                     |
+| `trigger`                              | `turn.trigger`                              | direct                                                     |
+| `memoryFlushWritePath`                 | `turn.memoryFlushWritePath`                 | direct                                                     |
+| `messageTo`                            | `turn.messageTo`                            | direct                                                     |
+| `messageThreadId`                      | `turn.messageThreadId`                      | direct                                                     |
+| `groupId`                              | `turn.groupId`                              | direct                                                     |
+| `groupChannel`                         | `turn.groupChannel`                         | direct                                                     |
+| `groupSpace`                           | `turn.groupSpace`                           | direct                                                     |
+| `spawnedBy`                            | `turn.spawnedBy`                            | direct                                                     |
+| `senderId`                             | `turn.senderId`                             | direct                                                     |
+| `senderName`                           | `turn.senderName`                           | direct                                                     |
+| `senderUsername`                       | `turn.senderUsername`                       | direct                                                     |
+| `senderE164`                           | `turn.senderE164`                           | direct                                                     |
+| `senderIsOwner`                        | `turn.senderIsOwner`                        | direct                                                     |
+| `currentChannelId`                     | `turn.currentChannelId`                     | direct                                                     |
+| `currentThreadTs`                      | `turn.currentThreadTs`                      | direct                                                     |
+| `currentMessageId`                     | `turn.currentMessageId`                     | direct                                                     |
+| `replyToMode`                          | `turn.replyToMode`                          | direct                                                     |
+| `hasRepliedRef`                        | host-only                                   | mutable ref; not serializable                              |
+| `requireExplicitMessageTarget`         | `turn.requireExplicitMessageTarget`         | direct                                                     |
+| `disableMessageTool`                   | `turn.disableMessageTool`                   | direct                                                     |
+| `allowGatewaySubagentBinding`          | `turn.allowGatewaySubagentBinding`          | direct                                                     |
+| `sessionFile`                          | `turn.sessionFile`                          | direct                                                     |
+| `workspaceDir`                         | `turn.workspaceDir`                         | direct                                                     |
+| `agentDir`                             | `turn.agentDir`                             | direct                                                     |
+| `config`                               | `turn.config`                               | serialized `OpenClawConfig` snapshot                       |
+| `skillsSnapshot`                       | `turn.skillsSnapshot`                       | serialized snapshot                                        |
+| `prompt`                               | `turn.prompt`                               | direct                                                     |
+| `images`                               | `turn.images`                               | serialized `ImageContent[]`                                |
+| `clientTools`                          | `turn.clientTools`                          | direct in contract, but **Gap** for v1 shell-only behavior |
+| `disableTools`                         | `turn.disableTools`                         | direct                                                     |
+| `provider`                             | `turn.provider`                             | direct                                                     |
+| `model`                                | `turn.model`                                | direct                                                     |
+| `authProfileId`                        | `turn.authProfileId`                        | direct                                                     |
+| `authProfileIdSource`                  | `turn.authProfileIdSource`                  | direct                                                     |
+| `thinkLevel`                           | `turn.thinkLevel`                           | direct                                                     |
+| `fastMode`                             | `turn.fastMode`                             | direct                                                     |
+| `verboseLevel`                         | `turn.verboseLevel`                         | direct                                                     |
+| `reasoningLevel`                       | `turn.reasoningLevel`                       | direct                                                     |
+| `toolResultFormat`                     | `turn.toolResultFormat`                     | direct                                                     |
+| `suppressToolErrorWarnings`            | `turn.suppressToolErrorWarnings`            | direct                                                     |
+| `bootstrapContextMode`                 | `turn.bootstrapContextMode`                 | direct                                                     |
+| `bootstrapContextRunKind`              | `turn.bootstrapContextRunKind`              | direct                                                     |
+| `bootstrapPromptWarningSignaturesSeen` | `turn.bootstrapPromptWarningSignaturesSeen` | direct                                                     |
+| `bootstrapPromptWarningSignature`      | `turn.bootstrapPromptWarningSignature`      | direct                                                     |
+| `execOverrides`                        | `turn.execOverrides`                        | direct                                                     |
+| `bashElevated`                         | `turn.bashElevated`                         | direct                                                     |
+| `timeoutMs`                            | `turn.timeoutMs`                            | direct                                                     |
+| `runId`                                | `turn.runId` and RPC `requestId`            | direct                                                     |
+| `abortSignal`                          | host-only                                   | adapter-owned cancellation only                            |
+| `shouldEmitToolResult`                 | host-only                                   | callback/presentation control                              |
+| `shouldEmitToolOutput`                 | host-only                                   | callback/presentation control                              |
+| `onPartialReply`                       | host-only                                   | callback                                                   |
+| `onAssistantMessageStart`              | host-only                                   | callback                                                   |
+| `onBlockReply`                         | host-only                                   | callback                                                   |
+| `onBlockReplyFlush`                    | host-only                                   | callback                                                   |
+| `blockReplyBreak`                      | `turn.blockReplyBreak`                      | direct                                                     |
+| `blockReplyChunking`                   | `turn.blockReplyChunking`                   | direct                                                     |
+| `onReasoningStream`                    | host-only                                   | callback                                                   |
+| `onReasoningEnd`                       | host-only                                   | callback                                                   |
+| `onToolResult`                         | host-only                                   | callback                                                   |
+| `onAgentEvent`                         | host-only                                   | callback                                                   |
+| `lane`                                 | host-only                                   | scheduling only                                            |
+| `enqueue`                              | host-only                                   | function, not serializable                                 |
+| `extraSystemPrompt`                    | `turn.extraSystemPrompt`                    | direct                                                     |
+| `inputProvenance`                      | `turn.inputProvenance`                      | serialized                                                 |
+| `streamParams`                         | `turn.streamParams`                         | serialized                                                 |
+| `ownerNumbers`                         | `turn.ownerNumbers`                         | direct                                                     |
+| `enforceFinalTag`                      | `turn.enforceFinalTag`                      | direct                                                     |
+| `allowTransientCooldownProbe`          | `turn.allowTransientCooldownProbe`          | direct                                                     |
 
 ### 6.2 `GraphTurnResponse` + host execution state -> `EmbeddedPiRunResult`
 
-| Output field | Source | Notes |
-|---|---|---|
-| `payloads` | `GraphTurnResponse.payloads` | direct |
-| `meta.durationMs` | host adapter wall-clock measurement | current runner already measures duration in TS |
-| `meta.agentMeta.sessionId` | `GraphTurnResponse.agentMeta.sessionId` or `turn.sessionId` | must be explicit |
-| `meta.agentMeta.provider` | `GraphTurnResponse.agentMeta.provider` | direct if graph supplies; otherwise `Gap` |
-| `meta.agentMeta.model` | `GraphTurnResponse.agentMeta.model` | direct if graph supplies; otherwise `Gap` |
-| `meta.agentMeta.compactionCount` | `GraphTurnResponse.agentMeta.compactionCount` | `Gap` unless LangGraph path reproduces current compaction accounting |
-| `meta.agentMeta.promptTokens` | `GraphTurnResponse.agentMeta.promptTokens` | `Gap` unless graph reports equivalent usage |
-| `meta.agentMeta.usage` | `GraphTurnResponse.agentMeta.usage` | direct if graph reports it |
-| `meta.agentMeta.lastCallUsage` | `GraphTurnResponse.agentMeta.lastCallUsage` | `Gap` unless graph reports it |
-| `meta.aborted` | host adapter abort tracking | host-owned |
-| `meta.systemPromptReport` | host-built report or `Gap` | current report is built inside existing embedded attempt path |
-| `meta.error` | `GraphTurnResponse.error` or host-side RPC failure mapping | must stay structured |
-| `meta.stopReason` | `GraphTurnResponse.stopReason` | direct |
-| `meta.pendingToolCalls` | `Gap` | current field is tied to existing client-tool-call path; v1 shell-only LangGraph path has no proven equivalent |
-| `didSendViaMessagingTool` | host execution side-effect tracking | `Gap` for v1 shell-only unless host execution path explicitly records it |
-| `messagingToolSentTexts` | host execution side-effect tracking | `Gap` for v1 shell-only |
-| `messagingToolSentMediaUrls` | host execution side-effect tracking | `Gap` for v1 shell-only |
-| `messagingToolSentTargets` | host execution side-effect tracking | `Gap` for v1 shell-only |
-| `successfulCronAdds` | host execution side-effect tracking | `Gap` for v1 shell-only |
-| `GraphTurnResponse.pendingApprovalDescriptor` | `Gap` | no dedicated `EmbeddedPiRunResult` field exists; external caller visibility must stay payload-based |
+| Output field                                  | Source                                                      | Notes                                                                                                          |
+| --------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `payloads`                                    | `GraphTurnResponse.payloads`                                | direct                                                                                                         |
+| `meta.durationMs`                             | host adapter wall-clock measurement                         | current runner already measures duration in TS                                                                 |
+| `meta.agentMeta.sessionId`                    | `GraphTurnResponse.agentMeta.sessionId` or `turn.sessionId` | must be explicit                                                                                               |
+| `meta.agentMeta.provider`                     | `GraphTurnResponse.agentMeta.provider`                      | direct if graph supplies; otherwise `Gap`                                                                      |
+| `meta.agentMeta.model`                        | `GraphTurnResponse.agentMeta.model`                         | direct if graph supplies; otherwise `Gap`                                                                      |
+| `meta.agentMeta.compactionCount`              | `GraphTurnResponse.agentMeta.compactionCount`               | `Gap` unless LangGraph path reproduces current compaction accounting                                           |
+| `meta.agentMeta.promptTokens`                 | `GraphTurnResponse.agentMeta.promptTokens`                  | `Gap` unless graph reports equivalent usage                                                                    |
+| `meta.agentMeta.usage`                        | `GraphTurnResponse.agentMeta.usage`                         | direct if graph reports it                                                                                     |
+| `meta.agentMeta.lastCallUsage`                | `GraphTurnResponse.agentMeta.lastCallUsage`                 | `Gap` unless graph reports it                                                                                  |
+| `meta.aborted`                                | host adapter abort tracking                                 | host-owned                                                                                                     |
+| `meta.systemPromptReport`                     | host-built report or `Gap`                                  | current report is built inside existing embedded attempt path                                                  |
+| `meta.error`                                  | `GraphTurnResponse.error` or host-side RPC failure mapping  | must stay structured                                                                                           |
+| `meta.stopReason`                             | `GraphTurnResponse.stopReason`                              | direct                                                                                                         |
+| `meta.pendingToolCalls`                       | `Gap`                                                       | current field is tied to existing client-tool-call path; v1 shell-only LangGraph path has no proven equivalent |
+| `didSendViaMessagingTool`                     | host execution side-effect tracking                         | `Gap` for v1 shell-only unless host execution path explicitly records it                                       |
+| `messagingToolSentTexts`                      | host execution side-effect tracking                         | `Gap` for v1 shell-only                                                                                        |
+| `messagingToolSentMediaUrls`                  | host execution side-effect tracking                         | `Gap` for v1 shell-only                                                                                        |
+| `messagingToolSentTargets`                    | host execution side-effect tracking                         | `Gap` for v1 shell-only                                                                                        |
+| `successfulCronAdds`                          | host execution side-effect tracking                         | `Gap` for v1 shell-only                                                                                        |
+| `GraphTurnResponse.pendingApprovalDescriptor` | `Gap`                                                       | no dedicated `EmbeddedPiRunResult` field exists; external caller visibility must stay payload-based            |
 
 ## 7) Failure-Mode Matrix
 
-| FM ID | Spec section(s) |
-|---|---|
-| FM-L1-01 | 3B, 3C, 5 |
-| FM-L1-02 | 3A, 3C, 3D, 5 |
-| FM-L1-03 | 3C, 3D, 5 |
-| FM-L1-04 | 4 |
-| FM-L1-05 | 4, 5 |
-| FM-L1-06 | 4 |
-| FM-L2-01 | 6.1 |
-| FM-L2-02 | 6.2 |
-| FM-L2-03 | 3C, 3D, 5 |
-| FM-L2-04 | 3C |
-| FM-L2-05 | 5, 6.1 |
-| FM-L2-06 | 3B |
-| FM-L2-07 | 3D, 5 |
-| FM-L2-08 | 3A, 3D |
+| FM ID    | Spec section(s) |
+| -------- | --------------- |
+| FM-L1-01 | 3B, 3C, 5       |
+| FM-L1-02 | 3A, 3C, 3D, 5   |
+| FM-L1-03 | 3C, 3D, 5       |
+| FM-L1-04 | 4               |
+| FM-L1-05 | 4, 5            |
+| FM-L1-06 | 4               |
+| FM-L2-01 | 6.1             |
+| FM-L2-02 | 6.2             |
+| FM-L2-03 | 3C, 3D, 5       |
+| FM-L2-04 | 3C              |
+| FM-L2-05 | 5, 6.1          |
+| FM-L2-06 | 3B              |
+| FM-L2-07 | 3D, 5           |
+| FM-L2-08 | 3A, 3D          |
 
 ## 8) Test Matrix
 
@@ -573,8 +569,8 @@ type HealthResponse = {
 ## 10) Discovery Questions for Implementing Agent
 
 1. **Python package location**
-   - I found no product-runtime Python package layout, only standalone scripts under `skills/**/scripts/*.py` and `scripts/check-composite-action-input-interpolation.py`.
-   - Decide and document the Python sidecar package location before coding.
+   - Resolved: use `assets/langgraph-turn-orchestrator-sidecar/`.
+   - Reason: `assets/` already ships in the package, so the sidecar can be found from package root in both local repo runs and installed-package runs without inventing a second runtime-asset pipeline.
 2. **System prompt report parity**
    - Current `EmbeddedPiRunResult.meta.systemPromptReport` comes from the existing embedded attempt path.
    - I found the field in `src/agents/pi-embedded-runner/types.ts` but did not find a clean existing adapter seam that would preserve it automatically for LangGraph.
@@ -606,44 +602,44 @@ type HealthResponse = {
 ### Requirements -> Spec sections
 
 | Requirement | Spec section(s) |
-|---|---|
-| FR-001 | 3A |
-| FR-002 | 3B, 11 |
-| FR-003 | 4, 5 |
-| FR-004 | 4, 5 |
-| FR-005 | 3D, 5 |
-| FR-006 | 3D, 5 |
-| FR-007 | 4 |
-| IR-001 | 6.1 |
-| IR-002 | 6.2 |
-| IR-003 | 3D, 5, 6.1 |
-| FHR-001 | 3B |
-| FHR-002 | 3C, 5, 11 |
-| FHR-003 | 3A, 3C, 3D, 5 |
-| FHR-004 | 3C, 5 |
-| FHR-005 | 3C, 3D, 5, 10 |
-| NFR-001 | 3A |
-| NFR-002 | 3C, 3D, 5 |
-| NFR-003 | 3B, 11 |
+| ----------- | --------------- |
+| FR-001      | 3A              |
+| FR-002      | 3B, 11          |
+| FR-003      | 4, 5            |
+| FR-004      | 4, 5            |
+| FR-005      | 3D, 5           |
+| FR-006      | 3D, 5           |
+| FR-007      | 4               |
+| IR-001      | 6.1             |
+| IR-002      | 6.2             |
+| IR-003      | 3D, 5, 6.1      |
+| FHR-001     | 3B              |
+| FHR-002     | 3C, 5, 11       |
+| FHR-003     | 3A, 3C, 3D, 5   |
+| FHR-004     | 3C, 5           |
+| FHR-005     | 3C, 3D, 5, 10   |
+| NFR-001     | 3A              |
+| NFR-002     | 3C, 3D, 5       |
+| NFR-003     | 3B, 11          |
 
 ### Failure modes -> Spec sections + tests
 
-| Failure mode | Spec sections | Test case |
-|---|---|---|
-| FM-L1-01 | 3B, 3C, 5 | `falls_back_to_legacy_when_sidecar_health_fails_before_new_turn` |
-| FM-L1-02 | 3A, 3C, 3D, 5 | `fails_loudly_when_sidecar_exits_mid_turn` |
-| FM-L1-03 | 3C, 3D, 5 | `invoke_turn_timeout_returns_structured_failure` |
-| FM-L1-04 | 4 | `intent_router_selects_clarification_without_execution` |
-| FM-L1-05 | 4, 5 | `verify_result_accepts_completed_execution_with_success_evidence` |
-| FM-L1-06 | 4 | `verify_result_allows_only_one_retry` |
-| FM-L2-01 | 6.1 | `graph_turn_request_mapping_is_field_complete` |
-| FM-L2-02 | 6.2 | `graph_turn_response_mapping_is_field_complete` |
-| FM-L2-03 | 3C, 3D, 5 | `approval_resume_round_trips_checkpoint_state` |
-| FM-L2-04 | 3C | `host_marks_sidecar_unhealthy_on_nonzero_exit` |
-| FM-L2-05 | 5, 6.1 | `invoke_turn_request_rejects_non_serializable_fields` |
-| FM-L2-06 | 3B | `invalid_orchestration_mode_is_rejected_or_defaulted_explicitly` |
-| FM-L2-07 | 3D, 5 | `unknown_execution_intent_fails_closed` |
-| FM-L2-08 | 3A, 3D | `same_session_langgraph_turns_are_serialized` |
+| Failure mode | Spec sections | Test case                                                         |
+| ------------ | ------------- | ----------------------------------------------------------------- |
+| FM-L1-01     | 3B, 3C, 5     | `falls_back_to_legacy_when_sidecar_health_fails_before_new_turn`  |
+| FM-L1-02     | 3A, 3C, 3D, 5 | `fails_loudly_when_sidecar_exits_mid_turn`                        |
+| FM-L1-03     | 3C, 3D, 5     | `invoke_turn_timeout_returns_structured_failure`                  |
+| FM-L1-04     | 4             | `intent_router_selects_clarification_without_execution`           |
+| FM-L1-05     | 4, 5          | `verify_result_accepts_completed_execution_with_success_evidence` |
+| FM-L1-06     | 4             | `verify_result_allows_only_one_retry`                             |
+| FM-L2-01     | 6.1           | `graph_turn_request_mapping_is_field_complete`                    |
+| FM-L2-02     | 6.2           | `graph_turn_response_mapping_is_field_complete`                   |
+| FM-L2-03     | 3C, 3D, 5     | `approval_resume_round_trips_checkpoint_state`                    |
+| FM-L2-04     | 3C            | `host_marks_sidecar_unhealthy_on_nonzero_exit`                    |
+| FM-L2-05     | 5, 6.1        | `invoke_turn_request_rejects_non_serializable_fields`             |
+| FM-L2-06     | 3B            | `invalid_orchestration_mode_is_rejected_or_defaulted_explicitly`  |
+| FM-L2-07     | 3D, 5         | `unknown_execution_intent_fails_closed`                           |
+| FM-L2-08     | 3A, 3D        | `same_session_langgraph_turns_are_serialized`                     |
 
 ## 13) Evidence
 

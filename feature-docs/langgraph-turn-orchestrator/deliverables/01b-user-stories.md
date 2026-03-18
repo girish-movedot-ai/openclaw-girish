@@ -9,9 +9,10 @@
 **So that** I can test the new turn controller without changing caller code.
 
 **Current-code grounding**
+
 - Current caller contract is `runEmbeddedPiAgent(params): Promise<EmbeddedPiRunResult>`.
 - The repo already has agent runtime routing for `embedded` vs `acp` in `src/config/types.agents.ts` - `AgentRuntimeConfig`.
-- Gap: no `langgraph` mode and no session-level orchestration override field were found.
+- Current routing surface now adds `turnOrchestration?: "legacy" | "langgraph"` at defaults, per-agent, and per-session scope.
 
 ### US-002 - Turn completes through respond path
 
@@ -20,6 +21,7 @@
 **So that** simple reply turns still return normal `payloads` and `meta`.
 
 **Current-code grounding**
+
 - `EmbeddedPiRunResult` already supports text/media payloads plus run metadata.
 - Existing callers in gateway, auto-reply, voice-call, and plugins already consume that result shape.
 
@@ -30,6 +32,7 @@
 **So that** the LangGraph path does not fork runtime behavior for shell/tool execution.
 
 **Current-code grounding**
+
 - Current exec approval goes through `bash-tools.exec*`, gateway approval handlers, and `ExecApprovalManager`.
 - Current code already returns structured `approval-pending` tool results and deterministic approval reply payloads.
 
@@ -40,6 +43,7 @@
 **So that** the session waits for user input before doing work.
 
 **Current-code grounding**
+
 - Current callers already handle normal reply payloads and empty/no-exec outcomes.
 - `runEmbeddedPiAgent` already supports non-exec turns because reply generation is expressed through `payloads`, not through a required execution result type.
 
@@ -52,6 +56,7 @@
 **So that** rollout errors fail in a controlled way.
 
 **Why this is required**
+
 - The existing agent runtime selector is a strict union (`embedded` or `acp`).
 - There is no current `langgraph` value, so adding one creates a new routing failure case.
 
@@ -62,6 +67,7 @@
 **So that** experiments can fail safe at the start of a turn.
 
 **Why this is required**
+
 - Current code has no sidecar and the embedded runner is the only proven path.
 - The design intent requires new-turn fallback when policy allows.
 
@@ -72,6 +78,7 @@
 **So that** the system does not mix two orchestration states in one turn.
 
 **Why this is required**
+
 - Current code keeps embedded run state in memory with active-run maps and per-turn retry state.
 - Approval and follow-up behavior already shows that mid-turn state matters and is not stateless.
 
@@ -82,6 +89,7 @@
 **So that** “ask the user first” stays a true blocked turn.
 
 **Why this is required**
+
 - Current `EmbeddedPiRunResult` can already return user-visible payloads without any execution result field.
 
 ### NS-005 - Sidecar crash produces a clear failure
@@ -91,6 +99,7 @@
 **So that** debugging is immediate.
 
 **Why this is required**
+
 - Current code already emits lifecycle `error` events and structured runner errors for important failures.
 - The LangGraph path must preserve that “fail loud” behavior.
 
@@ -107,6 +116,7 @@
   - current code does not resume the original turn through `runEmbeddedPiAgent`
 
 ## Evidence
+
 - `feature-docs/langgraph-turn-orchestrator/spec/01-design-intent.md` - target stories implied by graph nodes, fallback rules, and approval resume requirements
 - `src/agents/pi-embedded-runner/run.ts` - `runEmbeddedPiAgent`, current stable turn-runner boundary
 - `src/agents/pi-embedded-runner/run/params.ts` - `RunEmbeddedPiAgentParams`, current input surface
