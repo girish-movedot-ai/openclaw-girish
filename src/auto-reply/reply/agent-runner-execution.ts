@@ -829,6 +829,7 @@ export async function runAgentTurnWithFallback(params: {
             },
           );
           return (async () => {
+            const startedAt = Date.now();
             let attemptCompactionCount = 0;
             try {
               const result = await runEmbeddedPiAgent({
@@ -1098,6 +1099,31 @@ export async function runAgentTurnWithFallback(params: {
                     })()
                   : undefined,
               });
+              if (result.meta.stopReason?.startsWith("langgraph:")) {
+                const assistantText = result.payloads
+                  ?.map((payload) => payload.text?.trim() ?? "")
+                  .filter(Boolean)
+                  .join("\n\n")
+                  .trim();
+                if (assistantText) {
+                  emitAgentEvent({
+                    runId,
+                    stream: "assistant",
+                    data: { text: assistantText },
+                  });
+                }
+                emitAgentEvent({
+                  runId,
+                  stream: "lifecycle",
+                  data: {
+                    phase: "end",
+                    startedAt,
+                    endedAt: Date.now(),
+                    aborted: result.meta.aborted ?? false,
+                    stopReason: result.meta.stopReason,
+                  },
+                });
+              }
               bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
                 result.meta?.systemPromptReport,
               );
