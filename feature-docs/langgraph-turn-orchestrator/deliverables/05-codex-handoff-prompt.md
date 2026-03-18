@@ -3,6 +3,7 @@
 ## Context
 
 You have these spec documents (read in this order):
+
 1. `feature-docs/langgraph-turn-orchestrator/deliverables/00a-success-criteria.md` - Highest-priority acceptance target
 2. `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md` - Implementation spec (authoritative after success criteria)
 3. `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md` - Failure register (every entry must be addressed)
@@ -17,6 +18,7 @@ You have these spec documents (read in this order):
 Read `feature-docs/langgraph-turn-orchestrator/deliverables/00b-system-profile.md` Section 5 (Key Interfaces). Verify the type signatures are still accurate. If they've changed, update the spec before proceeding.
 
 Resolve these discovery questions before coding:
+
 1. Python sidecar package location is a `Gap`; the repo has no product-runtime Python package convention.
 2. `EmbeddedPiRunResult.meta.systemPromptReport` has no proven LangGraph parity path yet.
 3. `EmbeddedPiRunResult` has no dedicated pending-approval descriptor field.
@@ -25,6 +27,7 @@ Resolve these discovery questions before coding:
 6. Session-level orchestration override storage location is not implemented; `SessionEntry` is the most obvious current seam but not yet confirmed.
 
 If any of the verified code has changed enough to invalidate the mapping tables, update:
+
 - `feature-docs/langgraph-turn-orchestrator/deliverables/00b-system-profile.md`
 - `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md`
 
@@ -60,6 +63,7 @@ Build in this order:
    - Add timeout handling, child exit detection, invalid-mode handling, and required logs/events.
 
 Execution rules:
+
 - Reuse existing host execution/approval surfaces.
 - Preserve session-lane serialization.
 - Fail closed on unknown RPC statuses or intent values.
@@ -109,6 +113,7 @@ Use the test names from `feature-docs/langgraph-turn-orchestrator/deliverables/0
 ## Output Requirements
 
 Deliver:
+
 1. The implementation changes
 2. Any spec updates required by changed discovery
 3. A final report with:
@@ -122,6 +127,7 @@ Deliver:
 If you must leave something unresolved, mark it as `Gap` and explain why it could not be completed from the current codebase.
 
 ## Hard Rules
+
 1. Do NOT change the `runEmbeddedPiAgent` signature.
 2. Do NOT change the `EmbeddedPiRunResult` type.
 3. Do NOT change `runGatewayLoop`.
@@ -133,6 +139,7 @@ If you must leave something unresolved, mark it as `Gap` and explain why it coul
 9. Do NOT claim full parity with the current broad embedded tool surface unless you actually implemented it; the v1 spec is shell-only for execute.
 
 ## Evidence
+
 - `feature-docs/langgraph-turn-orchestrator/deliverables/04-implementation-spec.md` - authoritative implementation plan
 - `feature-docs/langgraph-turn-orchestrator/deliverables/03-failure-register.md` - failure-mode list and test names
 - `feature-docs/langgraph-turn-orchestrator/deliverables/02-requirements.md` - must-have requirements

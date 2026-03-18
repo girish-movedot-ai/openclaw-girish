@@ -17,11 +17,13 @@
   - `src/process/child-process-bridge.ts` - `attachChildProcessBridge` forwards process signals to a child
 
 **Specified constraint for the new sidecar**
+
 - Use a local child process owned by the TS host.
 - Use local-only stdio JSON messaging for the TS↔Python bridge.
 - Do not use a public network listener.
 
 **Why this is the least-guessy choice**
+
 - It matches the existing child-process management style already present in the repo.
 - No existing Python transport convention exists to reuse instead.
 
@@ -152,6 +154,7 @@
 - Mid-turn crashes, timeout failures, and resume failures must all emit an explicit failure event and structured failure output.
 
 ## Evidence
+
 - `src/agents/pi-embedded-runner/run.ts` - `runEmbeddedPiAgent`, queueing, runId/sessionId logging, current full-turn execution path
 - `src/agents/pi-embedded-runner/run/params.ts` - `RunEmbeddedPiAgentParams`, current input surface and large/non-serializable fields
 - `src/agents/pi-embedded-subscribe.handlers.lifecycle.ts` - lifecycle event emission

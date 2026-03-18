@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { requestExecApprovalDecisionForHost } from "../bash-tools.exec-approval-request.js";
 import { runExecProcess } from "../bash-tools.exec-runtime.js";
@@ -21,6 +23,33 @@ import type { EmbeddedPiAgentMeta, EmbeddedPiRunResult } from "./types.js";
 const log = createSubsystemLogger("langgraph");
 
 type LangGraphFailureKind = "langgraph_contract" | "langgraph_failure" | "langgraph_timeout";
+
+// ---------------------------------------------------------------------------
+// Session history write-back
+// ---------------------------------------------------------------------------
+
+async function appendSessionHistory(
+  sessionFile: string,
+  prompt: string,
+  replyText: string,
+): Promise<void> {
+  if (!sessionFile || !prompt.trim()) {
+    return;
+  }
+  try {
+    const dir = path.dirname(sessionFile);
+    await fs.promises.mkdir(dir, { recursive: true });
+    const ts = new Date().toISOString();
+    const entries =
+      JSON.stringify({ type: "human", content: prompt, ts }) +
+      "\n" +
+      JSON.stringify({ type: "ai", content: replyText, ts }) +
+      "\n";
+    await fs.promises.appendFile(sessionFile, entries, "utf8");
+  } catch (err) {
+    log.warn(`langgraph session write failed for ${sessionFile}: ${String(err)}`);
+  }
+}
 
 function buildSerializableTurnRequest(params: RunEmbeddedPiAgentParams): GraphTurnRequest {
   const rawTurn = {
@@ -414,6 +443,12 @@ export async function runLangGraphTurn(
           durationMs: Date.now() - startedAt,
         });
         await emitVisiblePayloads(params, result.payloads);
+        // Write user message + assistant reply to session JSONL for operating
+        // mind reconstruction on the next turn (Phase 7 write-back, TS side).
+        const replyText = result.payloads?.find((p) => p.text && !p.isError)?.text ?? "";
+        if (params.sessionFile && replyText) {
+          await appendSessionHistory(params.sessionFile, params.prompt, replyText);
+        }
         return result;
       }
       if (response.status === "failed") {
