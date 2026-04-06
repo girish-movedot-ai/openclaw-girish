@@ -1,4 +1,9 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveIsNixMode, resolveStateDir } from "../../config/paths.js";
 import { resolveOpenClawPackageRoot } from "../../infra/openclaw-root.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { createChildAdapter, type ChildAdapter } from "../../process/supervisor/adapters/child.js";
@@ -12,6 +17,10 @@ import { isInvokeTurnResponse, LANGGRAPH_HEALTH_TIMEOUT_MS } from "./langgraph-c
 
 const log = createSubsystemLogger("langgraph");
 const LANGGRAPH_RPC_SINGLETON_KEY = "__openclawLanggraphRpcClient";
+const LANGGRAPH_SIDECAR_DIRNAME = "langgraph-turn-orchestrator-sidecar";
+const LANGGRAPH_REQUIREMENTS_FILENAME = "requirements.txt";
+const LANGGRAPH_VENV_DIRNAME = "langgraph-sidecar";
+const LANGGRAPH_VENV_HASH_FILENAME = ".requirements.sha256";
 
 type PendingRpc = {
   resolve: (value: unknown) => void;
@@ -40,7 +49,21 @@ export type GraphRpcClient = {
   stop(): Promise<void>;
 };
 
-async function resolveSidecarEntrypoint(): Promise<string> {
+type SidecarPaths = {
+  entrypoint: string;
+  managedPython: string;
+  requirementsHashPath: string;
+  requirementsPath: string;
+  venvDir: string;
+};
+
+function resolveManagedPythonPath(venvDir: string): string {
+  return process.platform === "win32"
+    ? path.join(venvDir, "Scripts", "python.exe")
+    : path.join(venvDir, "bin", "python");
+}
+
+async function resolveSidecarPaths(): Promise<SidecarPaths> {
   const packageRoot = await resolveOpenClawPackageRoot({
     moduleUrl: import.meta.url,
     argv1: process.argv[1],
@@ -49,7 +72,84 @@ async function resolveSidecarEntrypoint(): Promise<string> {
   if (!packageRoot) {
     throw new Error("OpenClaw package root not found for LangGraph sidecar.");
   }
-  return path.join(packageRoot, "assets", "langgraph-turn-orchestrator-sidecar", "main.py");
+  const assetDir = path.join(packageRoot, "assets", LANGGRAPH_SIDECAR_DIRNAME);
+  const venvDir = path.join(resolveStateDir(process.env), LANGGRAPH_VENV_DIRNAME, ".venv");
+  return {
+    entrypoint: path.join(assetDir, "main.py"),
+    managedPython: resolveManagedPythonPath(venvDir),
+    requirementsHashPath: path.join(venvDir, LANGGRAPH_VENV_HASH_FILENAME),
+    requirementsPath: path.join(assetDir, LANGGRAPH_REQUIREMENTS_FILENAME),
+    venvDir,
+  };
+}
+
+function runBootstrapCommand(command: string, args: string[], label: string): void {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (!result.error && result.status === 0) {
+    return;
+  }
+  const details = [result.stderr, result.stdout, result.error?.message]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim())
+    .join("\n");
+  throw new Error(details ? `${label} failed: ${details}` : `${label} failed.`);
+}
+
+async function readRequirementsHash(requirementsPath: string): Promise<string> {
+  const requirements = await fs.readFile(requirementsPath, "utf8");
+  return createHash("sha256").update(requirements).digest("hex");
+}
+
+async function ensureManagedSidecarPython(paths: SidecarPaths): Promise<string> {
+  if (resolveIsNixMode(process.env)) {
+    throw new Error(
+      "LangGraph sidecar auto-install is disabled in Nix mode. Set OPENCLAW_LANGGRAPH_PYTHON to a Python environment with `langgraph` and `anthropic` installed.",
+    );
+  }
+  const requirementsHash = await readRequirementsHash(paths.requirementsPath);
+  const installedHash = await fs
+    .readFile(paths.requirementsHashPath, "utf8")
+    .then((value) => value.trim())
+    .catch(() => null);
+  if (fsSync.existsSync(paths.managedPython) && installedHash === requirementsHash) {
+    return paths.managedPython;
+  }
+  await fs.mkdir(path.dirname(paths.venvDir), { recursive: true });
+  const bootstrapPython = process.env.OPENCLAW_LANGGRAPH_BOOTSTRAP_PYTHON?.trim() || "python3";
+  if (!fsSync.existsSync(paths.managedPython)) {
+    log.info(`langgraph sidecar creating managed venv at ${paths.venvDir}`);
+    runBootstrapCommand(
+      bootstrapPython,
+      ["-m", "venv", paths.venvDir],
+      "LangGraph sidecar virtualenv creation",
+    );
+  } else {
+    log.info("langgraph sidecar refreshing managed venv dependencies");
+  }
+  runBootstrapCommand(
+    paths.managedPython,
+    ["-m", "pip", "install", "--disable-pip-version-check", "--upgrade", "pip"],
+    "LangGraph sidecar pip upgrade",
+  );
+  runBootstrapCommand(
+    paths.managedPython,
+    ["-m", "pip", "install", "--disable-pip-version-check", "-r", paths.requirementsPath],
+    "LangGraph sidecar dependency install",
+  );
+  await fs.writeFile(paths.requirementsHashPath, `${requirementsHash}\n`, "utf8");
+  return paths.managedPython;
+}
+
+async function resolveSidecarRuntime(): Promise<{ entrypoint: string; python: string }> {
+  const paths = await resolveSidecarPaths();
+  const explicitPython = process.env.OPENCLAW_LANGGRAPH_PYTHON?.trim();
+  return {
+    entrypoint: paths.entrypoint,
+    python: explicitPython || (await ensureManagedSidecarPython(paths)),
+  };
 }
 
 class ManagedGraphRpcClient implements GraphRpcClient {
@@ -141,8 +241,7 @@ class ManagedGraphRpcClient implements GraphRpcClient {
       this.restartBudgetUsed = true;
       log.warn("langgraph sidecar restart requested before a new turn");
     }
-    const entrypoint = await resolveSidecarEntrypoint();
-    const python = process.env.OPENCLAW_LANGGRAPH_PYTHON?.trim() || "python3";
+    const { entrypoint, python } = await resolveSidecarRuntime();
     const child = await createChildAdapter({
       argv: [python, "-u", entrypoint],
       stdinMode: "pipe-open",
@@ -273,7 +372,7 @@ export function getLangGraphRpcClient(): GraphRpcClient {
   if (!globalState[LANGGRAPH_RPC_SINGLETON_KEY]) {
     globalState[LANGGRAPH_RPC_SINGLETON_KEY] = new ManagedGraphRpcClient();
   }
-  return globalState[LANGGRAPH_RPC_SINGLETON_KEY] as GraphRpcClient;
+  return globalState[LANGGRAPH_RPC_SINGLETON_KEY];
 }
 
 export async function stopLangGraphRpcClient(): Promise<void> {

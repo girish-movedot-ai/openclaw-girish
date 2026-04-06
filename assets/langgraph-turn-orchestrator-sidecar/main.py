@@ -47,6 +47,7 @@ class TurnState(TypedDict, total=False):
     # Reconstruction (Phase 1)
     operating_mind: Optional[dict[str, Any]]
     session_history: Optional[list[dict[str, str]]]
+    mem0_memories: Optional[list[str]]
 
     # Diagnosis (Phase 2)
     unknowns: Optional[list[str]]
@@ -85,6 +86,8 @@ class TurnState(TypedDict, total=False):
 
 _CHECKPOINTER: MemorySaver = MemorySaver()
 _GRAPH: Any = None  # lazily initialized
+_MEM0_CLIENT: Any = None
+_MEM0_DISABLED_REASON: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +107,106 @@ def _log(message: str) -> None:
 
 def _structured_error(kind: str, message: str) -> dict[str, str]:
     return {"kind": kind, "message": message}
+
+
+def _resolve_mem0_user_id(turn: dict[str, Any]) -> str:
+    for candidate in (
+        turn.get("senderId"),
+        turn.get("agentAccountId"),
+        turn.get("senderUsername"),
+        turn.get("senderE164"),
+        turn.get("sessionId"),
+    ):
+        if candidate is None:
+            continue
+        value = str(candidate).strip()
+        if value:
+            return value
+    return "anonymous"
+
+
+def _get_mem0_client() -> Any:
+    global _MEM0_CLIENT, _MEM0_DISABLED_REASON
+    if _MEM0_CLIENT is not None:
+        return _MEM0_CLIENT
+    api_key = os.environ.get("MEM0_API_KEY", "").strip()
+    if not api_key:
+        if _MEM0_DISABLED_REASON != "missing_api_key":
+            _MEM0_DISABLED_REASON = "missing_api_key"
+            _log("mem0 disabled: MEM0_API_KEY is not set")
+        return None
+    try:
+        from mem0 import MemoryClient  # noqa: PLC0415
+
+        _MEM0_CLIENT = MemoryClient(api_key=api_key)
+        _MEM0_DISABLED_REASON = None
+        _log("mem0 enabled: MemoryClient initialized")
+        return _MEM0_CLIENT
+    except Exception as exc:
+        _MEM0_DISABLED_REASON = "client_init_failed"
+        _log(f"mem0 disabled: client init failed: {exc}")
+        return None
+
+
+def _search_mem0_memories(turn: dict[str, Any]) -> list[str]:
+    client = _get_mem0_client()
+    if client is None:
+        return []
+    prompt = str(turn.get("prompt") or "").strip()
+    if not prompt:
+        return []
+    try:
+        response = client.search(
+            prompt,
+            filters={"user_id": _resolve_mem0_user_id(turn)},
+        )
+        results = response.get("results") if isinstance(response, dict) else None
+        if not isinstance(results, list):
+            return []
+        memories: list[str] = []
+        for item in results[:5]:
+            if not isinstance(item, dict):
+                continue
+            memory = str(item.get("memory") or "").strip()
+            if memory:
+                memories.append(memory[:300])
+        if memories:
+            _log(f"mem0 search: retrieved {len(memories)} memories")
+        return memories
+    except Exception as exc:
+        _log(f"mem0 search error: {exc}")
+        return []
+
+
+def _store_turn_in_mem0(turn: dict[str, Any], response: dict[str, Any]) -> None:
+    client = _get_mem0_client()
+    if client is None:
+        return
+    prompt = str(turn.get("prompt") or "").strip()
+    payloads = response.get("payloads") or []
+    reply_text = ""
+    if isinstance(payloads, list):
+        for payload in payloads:
+            if not isinstance(payload, dict):
+                continue
+            text = str(payload.get("text") or "").strip()
+            if text:
+                reply_text = text
+                break
+    terminal_state = str(response.get("terminalState") or "")
+    if not prompt or not reply_text or terminal_state == "blocked_waiting_for_user":
+        return
+    try:
+        client.add(
+            [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": reply_text},
+            ],
+            user_id=_resolve_mem0_user_id(turn),
+        )
+        _log("mem0 add: stored turn memory")
+    except Exception as exc:
+        _log(f"mem0 add error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +289,7 @@ def _extract_message_pairs(entries: list[dict[str, Any]]) -> list[dict[str, str]
 
 
 def _reconstruct_operating_mind(
-    turn: dict[str, Any], history_entries: list[dict[str, Any]]
+    turn: dict[str, Any], history_entries: list[dict[str, Any]], mem0_memories: list[str]
 ) -> dict[str, Any]:
     """
     Build a structured operating mind from session state and turn context.
@@ -269,6 +372,7 @@ def _reconstruct_operating_mind(
             "is_owner": is_owner,
             "channel": channel,
             "standing_instructions": standing_instructions,
+            "mem0_memories": mem0_memories,
             "interaction_style": "direct and technical" if is_owner else "standard",
             "quality_expectations": "accurate, complete, user-friendly responses",
         },
@@ -307,6 +411,7 @@ def _reconstruct_operating_mind(
             "status": "ready",
             "blockers": [],
             "recent_outputs": [],
+            "memory_context": mem0_memories,
             "session_id": str(turn.get("sessionId") or ""),
             "run_id": str(turn.get("runId") or ""),
             "history_depth": len(history_messages),
@@ -385,6 +490,12 @@ def _build_system_prompt(mind: dict[str, Any], turn: dict[str, Any]) -> str:
         if instructions
         else "  (none recorded yet)"
     )
+    memories = user_model.get("mem0_memories") or task_ctx.get("memory_context") or []
+    memories_text = (
+        "\n".join(f"  - {memory}" for memory in memories[:5])
+        if memories
+        else "  (none retrieved)"
+    )
     tools_text = ", ".join(capability.get("available_tools") or ["none"])
     active_task = task_ctx.get("active_objective") or "none"
     history_depth = int(task_ctx.get("history_depth") or 0)
@@ -397,6 +508,9 @@ Decision posture: {identity.get("decision_posture", "act on clear tasks, ask whe
 User: {user_model.get("name", "User")} | Channel: {user_model.get("channel", "web")} | Owner: {user_model.get("is_owner", False)}
 Standing instructions from this user:
 {instructions_text}
+
+Relevant long-term memories:
+{memories_text}
 
 Available tools: {tools_text}
 Tools disabled: {capability.get("disable_tools", False)}
@@ -555,6 +669,7 @@ def _node_ingest_turn(state: TurnState) -> TurnState:
         "execution_request": None,
         "execution_result": None,
         "final_response": None,
+        "mem0_memories": [],
         "pending_reply": None,
         "session_history": [],
         "operating_mind": None,
@@ -577,7 +692,8 @@ def _node_reconstruct_state(state: TurnState) -> TurnState:
     session_file = str(turn.get("sessionFile") or "")
     history_entries = _read_session_history(session_file, max_entries=40)
     history_messages = _extract_message_pairs(history_entries)
-    mind = _reconstruct_operating_mind(turn, history_entries)
+    mem0_memories = _search_mem0_memories(turn)
+    mind = _reconstruct_operating_mind(turn, history_entries, mem0_memories)
 
     n_instr = len((mind.get("user_model") or {}).get("standing_instructions") or [])
     n_tools = len((mind.get("capability_model") or {}).get("available_tools") or [])
@@ -585,12 +701,14 @@ def _node_reconstruct_state(state: TurnState) -> TurnState:
     _log(
         f"operating_mind reconstructed: "
         f"standing_instructions={n_instr} "
+        f"mem0_memories={len(mem0_memories)} "
         f"available_tools={n_tools} "
         f"active_task={active} "
         f"history_messages={len(history_messages)}"
     )
 
     return {
+        "mem0_memories": mem0_memories,
         "operating_mind": mind,
         "session_history": history_messages,
     }
@@ -839,6 +957,8 @@ def _node_persist_turn_artifacts(state: TurnState) -> TurnState:
     task_ctx = mind.get("task_context") or {}
     if task_ctx.get("active_objective"):
         _log("state_writeback: active task context preserved")
+
+    _store_turn_in_mem0(turn, response)
 
     return {"state_written": True}
 
