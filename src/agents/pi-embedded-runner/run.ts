@@ -66,6 +66,8 @@ import { runPostCompactionSideEffects } from "./compact.js";
 import { buildEmbeddedCompactionRuntimeContext } from "./compaction-runtime-context.js";
 import { runContextEngineMaintenance } from "./context-engine-maintenance.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
+import { runLangGraphTurn } from "./langgraph-adapter.js";
+import { getLangGraphRpcClient } from "./langgraph-sidecar.js";
 import { log } from "./logger.js";
 import { resolveModelAsync } from "./model.js";
 import { handleAssistantFailover } from "./run/assistant-failover.js";
@@ -218,6 +220,33 @@ export async function runEmbeddedPiAgent(
         workspaceDir: resolvedWorkspace,
         allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
       });
+      const resolvedAgentId = workspaceResolution.agentId ?? params.agentId;
+      const sidecar = getLangGraphRpcClient();
+      const langgraphParams = {
+        ...params,
+        agentId: resolvedAgentId,
+        workspaceDir: resolvedWorkspace,
+      };
+      params.onAgentEvent?.({
+        stream: "langgraph",
+        data: {
+          traceId: params.runId,
+          sessionId: params.sessionId,
+          agentId: resolvedAgentId,
+          orchestrationMode: "langgraph",
+          event: "mode_selected",
+        },
+      });
+      log.info(
+        `langgraph selected runId=${params.runId} sessionId=${params.sessionId} agentId=${resolvedAgentId ?? "main"}`,
+      );
+      await sidecar.ensureStarted();
+      const health = await sidecar.health();
+      if (!health.ok) {
+        throw new Error("LangGraph sidecar health check failed before turn start.");
+      }
+      return await runLangGraphTurn(langgraphParams, { sidecar });
+      const prevCwd = process.cwd();
 
       let provider = (params.provider ?? DEFAULT_PROVIDER).trim() || DEFAULT_PROVIDER;
       let modelId = (params.model ?? DEFAULT_MODEL).trim() || DEFAULT_MODEL;

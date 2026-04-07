@@ -112,6 +112,7 @@ export const SessionsPatchParamsSchema = Type.Object(
         Type.Null(),
       ]),
     ),
+    turnOrchestration: Type.Optional(Type.Union([Type.Literal("langgraph"), Type.Null()])),
     elevatedLevel: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     execHost: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     execSecurity: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),

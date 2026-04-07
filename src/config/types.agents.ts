@@ -95,6 +95,8 @@ export type AgentConfig = {
   /** Optional per-agent stream params (e.g. cacheRetention, temperature). */
   params?: Record<string, unknown>;
   tools?: AgentToolsConfig;
+  /** Optional embedded turn orchestrator override for this agent. */
+  turnOrchestration?: "langgraph";
   /** Optional runtime descriptor for this agent. */
   runtime?: AgentRuntimeConfig;
 };

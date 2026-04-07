@@ -158,6 +158,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    turnOrchestration: z.literal("langgraph").optional(),
     thinkingDefault: z
       .union([
         z.literal("off"),

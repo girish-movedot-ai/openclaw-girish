@@ -300,6 +300,19 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("turnOrchestration" in patch) {
+    const raw = patch.turnOrchestration;
+    if (raw === null) {
+      delete next.turnOrchestration;
+    } else if (raw !== undefined) {
+      const normalized = String(raw).trim().toLowerCase();
+      if (normalized !== "langgraph") {
+        return invalid('invalid turnOrchestration (use "langgraph")');
+      }
+      next.turnOrchestration = normalized;
+    }
+  }
+
   if ("elevatedLevel" in patch) {
     const raw = patch.elevatedLevel;
     if (raw === null) {
