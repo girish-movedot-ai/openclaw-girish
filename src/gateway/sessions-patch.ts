@@ -306,8 +306,8 @@ export async function applySessionsPatchToStore(params: {
       delete next.turnOrchestration;
     } else if (raw !== undefined) {
       const normalized = String(raw).trim().toLowerCase();
-      if (normalized !== "legacy" && normalized !== "langgraph") {
-        return invalid('invalid turnOrchestration (use "legacy"|"langgraph")');
+      if (normalized !== "langgraph") {
+        return invalid('invalid turnOrchestration (use "langgraph")');
       }
       next.turnOrchestration = normalized;
     }

@@ -811,7 +811,7 @@ export const AgentEntrySchema = z
     sandbox: AgentSandboxSchema,
     params: z.record(z.string(), z.unknown()).optional(),
     tools: AgentToolsSchema,
-    turnOrchestration: z.union([z.literal("legacy"), z.literal("langgraph")]).optional(),
+    turnOrchestration: z.literal("langgraph").optional(),
     runtime: AgentRuntimeSchema,
   })
   .strict();

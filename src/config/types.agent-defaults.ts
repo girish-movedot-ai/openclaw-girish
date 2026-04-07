@@ -211,7 +211,7 @@ export type AgentDefaultsConfig = {
     projectSettingsPolicy?: "trusted" | "sanitize" | "ignore";
   };
   /** Default turn orchestrator for embedded runtime turns. */
-  turnOrchestration?: "legacy" | "langgraph";
+  turnOrchestration?: "langgraph";
   /** Vector memory search configuration (per-agent overrides supported). */
   memorySearch?: MemorySearchConfig;
   /** Default thinking level when no /think directive is present. */

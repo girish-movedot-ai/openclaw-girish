@@ -96,7 +96,7 @@ export type AgentConfig = {
   params?: Record<string, unknown>;
   tools?: AgentToolsConfig;
   /** Optional embedded turn orchestrator override for this agent. */
-  turnOrchestration?: "legacy" | "langgraph";
+  turnOrchestration?: "langgraph";
   /** Optional runtime descriptor for this agent. */
   runtime?: AgentRuntimeConfig;
 };

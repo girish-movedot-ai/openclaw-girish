@@ -67,7 +67,6 @@ import { buildEmbeddedCompactionRuntimeContext } from "./compaction-runtime-cont
 import { runContextEngineMaintenance } from "./context-engine-maintenance.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { runLangGraphTurn } from "./langgraph-adapter.js";
-import { resolveTurnOrchestrationMode } from "./langgraph-mode.js";
 import { getLangGraphRpcClient } from "./langgraph-sidecar.js";
 import { log } from "./logger.js";
 import { resolveModelAsync } from "./model.js";
@@ -222,56 +221,31 @@ export async function runEmbeddedPiAgent(
         allowGatewaySubagentBinding: params.allowGatewaySubagentBinding,
       });
       const resolvedAgentId = workspaceResolution.agentId ?? params.agentId;
-      const orchestrationMode = resolveTurnOrchestrationMode({
-        cfg: params.config,
+      const sidecar = getLangGraphRpcClient();
+      const langgraphParams = {
+        ...params,
         agentId: resolvedAgentId,
-        sessionKey: params.sessionKey,
-      });
-      if (orchestrationMode === "langgraph") {
-        const sidecar = getLangGraphRpcClient();
-        const langgraphParams = {
-          ...params,
+        workspaceDir: resolvedWorkspace,
+      };
+      params.onAgentEvent?.({
+        stream: "langgraph",
+        data: {
+          traceId: params.runId,
+          sessionId: params.sessionId,
           agentId: resolvedAgentId,
-          workspaceDir: resolvedWorkspace,
-        };
-        try {
-          params.onAgentEvent?.({
-            stream: "langgraph",
-            data: {
-              traceId: params.runId,
-              sessionId: params.sessionId,
-              agentId: resolvedAgentId,
-              orchestrationMode,
-              event: "mode_selected",
-            },
-          });
-          log.info(
-            `langgraph selected runId=${params.runId} sessionId=${params.sessionId} agentId=${resolvedAgentId ?? "main"}`,
-          );
-          await sidecar.ensureStarted();
-          const health = await sidecar.health();
-          if (!health.ok) {
-            throw new Error("LangGraph sidecar health check failed before turn start.");
-          }
-          return await runLangGraphTurn(langgraphParams, { sidecar });
-        } catch (err) {
-          const reason = describeUnknownError(err);
-          params.onAgentEvent?.({
-            stream: "langgraph",
-            data: {
-              traceId: params.runId,
-              sessionId: params.sessionId,
-              agentId: resolvedAgentId,
-              orchestrationMode,
-              event: "fallback_to_legacy",
-              reason,
-            },
-          });
-          log.warn(
-            `langgraph pre-turn fallback runId=${params.runId} sessionId=${params.sessionId} reason=${reason}`,
-          );
-        }
+          orchestrationMode: "langgraph",
+          event: "mode_selected",
+        },
+      });
+      log.info(
+        `langgraph selected runId=${params.runId} sessionId=${params.sessionId} agentId=${resolvedAgentId ?? "main"}`,
+      );
+      await sidecar.ensureStarted();
+      const health = await sidecar.health();
+      if (!health.ok) {
+        throw new Error("LangGraph sidecar health check failed before turn start.");
       }
+      return await runLangGraphTurn(langgraphParams, { sidecar });
       const prevCwd = process.cwd();
 
       let provider = (params.provider ?? DEFAULT_PROVIDER).trim() || DEFAULT_PROVIDER;

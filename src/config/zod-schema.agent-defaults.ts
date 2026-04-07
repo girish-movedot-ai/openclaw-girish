@@ -158,7 +158,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
-    turnOrchestration: z.union([z.literal("legacy"), z.literal("langgraph")]).optional(),
+    turnOrchestration: z.literal("langgraph").optional(),
     thinkingDefault: z
       .union([
         z.literal("off"),

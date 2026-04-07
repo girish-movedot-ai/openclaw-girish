@@ -132,7 +132,7 @@ export type SessionEntry = {
   execAsk?: string;
   execNode?: string;
   responseUsage?: "on" | "off" | "tokens" | "full";
-  turnOrchestration?: "legacy" | "langgraph";
+  turnOrchestration?: "langgraph";
   providerOverride?: string;
   modelOverride?: string;
   authProfileOverride?: string;
